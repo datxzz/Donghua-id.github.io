@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ShortLink - No More 404</title>
+    <title>GitShort - URL Shortener</title>
     <style>
         :root {
-            --primary: #3b82f6;
-            --bg: #0f172a;
-            --card: #1e293b;
-            --text: #f8fafc;
-            --border: #334155;
-            --success: #10b981;
-            --error: #ef4444;
+            --primary: #238636;
+            --bg: #0d1117;
+            --card: #161b22;
+            --text: #c9d1d9;
+            --border: #30363d;
+            --success: #3fb950;
+            --error: #f85149;
         }
         body {
-            font-family: -apple-system, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg);
             color: var(--text);
             padding: 20px;
@@ -32,20 +32,20 @@
         }
         .card {
             background: var(--card);
-            border-radius: 10px;
+            border-radius: 6px;
             padding: 20px;
             margin-bottom: 20px;
             border: 1px solid var(--border);
         }
         input, button {
             width: 100%;
-            padding: 12px;
+            padding: 10px 12px;
             margin-bottom: 10px;
-            border-radius: 8px;
+            border-radius: 6px;
             border: 1px solid var(--border);
             background: var(--card);
             color: var(--text);
-            font-size: 16px;
+            font-size: 14px;
         }
         button {
             background: var(--primary);
@@ -55,7 +55,7 @@
             transition: background 0.2s;
         }
         button:hover {
-            background: #2563eb;
+            background: #2ea043;
         }
         #result {
             display: none;
@@ -68,30 +68,44 @@
         .history-item {
             padding: 10px 0;
             border-bottom: 1px solid var(--border);
+            margin-bottom: 10px;
+        }
+        .history-item:last-child {
+            border-bottom: none;
+        }
+        #emptyHistory {
+            text-align: center;
+            color: var(--text);
+            opacity: 0.7;
+            padding: 20px 0;
         }
     </style>
 </head>
 <body>
     <div id="app" class="container">
         <header>
-            <h1>ShortLink</h1>
-            <p>Buat link pendek tanpa error 404</p>
+            <h1>GitShort</h1>
+            <p>URL Shortener untuk GitHub Pages</p>
         </header>
 
         <div class="card">
-            <input type="url" id="urlInput" placeholder="Masukkan URL panjang" required>
-            <button id="generateBtn">Buat Link</button>
+            <input type="url" id="urlInput" placeholder="https://example.com/very-long-url" required>
+            <button id="generateBtn">Buat Link Pendek</button>
         </div>
 
         <div id="result" class="card">
             <h2>Link Pendek Anda:</h2>
-            <a id="shortLink" target="_blank"></a>
+            <div class="short-url">
+                <a id="shortLink" target="_blank"></a>
+            </div>
             <button id="copyBtn">Salin Link</button>
         </div>
 
         <div class="card" id="history">
             <h2>Riwayat Link</h2>
-            <div id="historyList"></div>
+            <div id="historyList">
+                <p id="emptyHistory">Belum ada riwayat</p>
+            </div>
         </div>
     </div>
 
@@ -99,7 +113,7 @@
         <div class="card">
             <h2>Mengarahkan...</h2>
             <p id="redirectText">Harap tunggu sebentar</p>
-            <a id="manualRedirect">Klik ini jika tidak redirect otomatis</a>
+            <a id="manualRedirect" class="manual-link">Klik ini jika tidak redirect otomatis</a>
         </div>
     </div>
 
@@ -112,20 +126,19 @@
             const shortLink = document.getElementById('shortLink');
             const copyBtn = document.getElementById('copyBtn');
             const historyList = document.getElementById('historyList');
+            const emptyHistory = document.getElementById('emptyHistory');
             const redirect = document.getElementById('redirect');
             const redirectText = document.getElementById('redirectText');
             const manualRedirect = document.getElementById('manualRedirect');
 
-            // Check for redirect first
-            const params = new URLSearchParams(window.location.search);
-            const code = params.get('c');
-            
-            if (code) {
-                handleRedirect(code);
+            // GitHub Pages compatible redirect handler
+            const hash = window.location.hash.substring(1);
+            if (hash) {
+                handleRedirect(hash);
                 return;
             }
 
-            // Load history
+            // Load history on startup
             loadHistory();
 
             // Setup event listeners
@@ -136,37 +149,46 @@
                 const longUrl = urlInput.value.trim();
                 
                 if (!isValidUrl(longUrl)) {
-                    alert('Masukkan URL yang valid (contoh: https://example.com)');
+                    showError('Masukkan URL yang valid (contoh: https://example.com)');
                     return;
                 }
 
                 const code = generateCode();
-                const shortUrl = `${window.location.origin}?c=${code}`;
+                const shortUrl = `${window.location.origin}/#${code}`;
 
                 // Save to storage
                 const linkData = {
                     url: longUrl,
                     shortUrl: shortUrl,
-                    created: new Date().toISOString()
+                    code: code,
+                    created: new Date().toISOString(),
+                    clicks: 0
                 };
-                localStorage.setItem(`sl_${code}`, JSON.stringify(linkData));
-
-                // Save to history
-                saveToHistory(linkData);
+                localStorage.setItem(`git_${code}`, JSON.stringify(linkData));
 
                 // Show result
                 shortLink.textContent = shortUrl;
                 shortLink.href = longUrl;
                 result.style.display = 'block';
+                
+                // Reload history
+                loadHistory();
+                
+                // Clear input
+                urlInput.value = '';
             }
 
             function handleRedirect(code) {
                 app.style.display = 'none';
                 redirect.style.display = 'block';
                 
-                const linkData = JSON.parse(localStorage.getItem(`sl_${code}`));
+                const linkData = JSON.parse(localStorage.getItem(`git_${code}`));
 
                 if (linkData && linkData.url) {
+                    // Update click count
+                    linkData.clicks++;
+                    localStorage.setItem(`git_${code}`, JSON.stringify(linkData));
+                    
                     redirectText.textContent = `Mengarahkan ke: ${linkData.url}`;
                     manualRedirect.href = linkData.url;
                     manualRedirect.textContent = linkData.url;
@@ -179,8 +201,8 @@
                     redirect.innerHTML = `
                         <div class="card">
                             <h2>Link Tidak Ditemukan</h2>
-                            <p>Kode ${code} tidak valid</p>
-                            <a href="${window.location.origin}">Kembali ke halaman utama</a>
+                            <p>Kode ${code} tidak valid atau sudah kadaluarsa</p>
+                            <a href="${window.location.origin}" class="manual-link">Kembali ke halaman utama</a>
                         </div>
                     `;
                 }
@@ -188,10 +210,12 @@
 
             function loadHistory() {
                 const history = [];
+                // Get all keys from localStorage
                 for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i);
-                    if (key.startsWith('sl_')) {
-                        history.push(JSON.parse(localStorage.getItem(key)));
+                    if (key.startsWith('git_')) {
+                        const linkData = JSON.parse(localStorage.getItem(key));
+                        history.push(linkData);
                     }
                 }
                 
@@ -199,30 +223,42 @@
                 history.sort((a, b) => new Date(b.created) - new Date(a.created));
                 
                 if (history.length === 0) {
-                    historyList.innerHTML = '<p>Belum ada riwayat</p>';
+                    emptyHistory.style.display = 'block';
+                    historyList.innerHTML = '';
                     return;
                 }
                 
+                emptyHistory.style.display = 'none';
                 historyList.innerHTML = '';
+                
                 history.forEach(item => {
                     const historyItem = document.createElement('div');
                     historyItem.className = 'history-item';
                     historyItem.innerHTML = `
-                        <p><strong>${item.shortUrl}</strong></p>
+                        <h3>${item.shortUrl}</h3>
                         <p>${item.url}</p>
-                        <small>Dibuat: ${new Date(item.created).toLocaleString()}</small>
+                        <small>${item.clicks} klik • Dibuat: ${formatDate(item.created)}</small>
                     `;
                     historyList.appendChild(historyItem);
                 });
             }
 
-            function saveToHistory(linkData) {
-                loadHistory(); // Refresh history display
+            function copyShortLink() {
+                navigator.clipboard.writeText(shortLink.textContent)
+                    .then(() => {
+                        copyBtn.textContent = 'Tersalin!';
+                        setTimeout(() => {
+                            copyBtn.textContent = 'Salin Link';
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        console.error('Gagal menyalin:', err);
+                        alert('Gagal menyalin link');
+                    });
             }
 
-            function copyShortLink() {
-                navigator.clipboard.writeText(shortLink.textContent);
-                alert('Link berhasil disalin!');
+            function showError(message) {
+                alert(message);
             }
 
             function isValidUrl(url) {
@@ -236,6 +272,17 @@
 
             function generateCode() {
                 return Math.floor(100000 + Math.random() * 900000); // 6-digit code
+            }
+
+            function formatDate(dateString) {
+                const options = { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                };
+                return new Date(dateString).toLocaleDateString('id-ID', options);
             }
         });
     </script>
