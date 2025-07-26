@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShortLink - No More 404</title>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --border: #334155;
+            --success: #10b981;
+            --error: #ef4444;
+        }
+        body {
+            font-family: -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 20px;
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: var(--card);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+        input, button {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            font-size: 16px;
+        }
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        #result {
+            display: none;
+        }
+        #redirect {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .history-item {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <header>
+            <h1>ShortLink</h1>
+            <p>Buat link pendek tanpa error 404</p>
+        </header>
+
+        <div class="card">
+            <input type="url" id="urlInput" placeholder="Masukkan URL panjang" required>
+            <button id="generateBtn">Buat Link</button>
+        </div>
+
+        <div id="result" class="card">
+            <h2>Link Pendek Anda:</h2>
+            <a id="shortLink" target="_blank"></a>
+            <button id="copyBtn">Salin Link</button>
+        </div>
+
+        <div class="card" id="history">
+            <h2>Riwayat Link</h2>
+            <div id="historyList"></div>
+        </div>
+    </div>
+
+    <div id="redirect" class="container">
+        <div class="card">
+            <h2>Mengarahkan...</h2>
+            <p id="redirectText">Harap tunggu sebentar</p>
+            <a id="manualRedirect">Klik ini jika tidak redirect otomatis</a>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize elements
+            const app = document.getElementById('app');
+            const urlInput = document.getElementById('urlInput');
+            const result = document.getElementById('result');
+            const shortLink = document.getElementById('shortLink');
+            const copyBtn = document.getElementById('copyBtn');
+            const historyList = document.getElementById('historyList');
+            const redirect = document.getElementById('redirect');
+            const redirectText = document.getElementById('redirectText');
+            const manualRedirect = document.getElementById('manualRedirect');
+
+            // Check for redirect first
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get('c');
+            
+            if (code) {
+                handleRedirect(code);
+                return;
+            }
+
+            // Load history
+            loadHistory();
+
+            // Setup event listeners
+            document.getElementById('generateBtn').addEventListener('click', createShortLink);
+            copyBtn.addEventListener('click', copyShortLink);
+
+            function createShortLink() {
+                const longUrl = urlInput.value.trim();
+                
+                if (!isValidUrl(longUrl)) {
+                    alert('Masukkan URL yang valid (contoh: https://example.com)');
+                    return;
+                }
+
+                const code = generateCode();
+                const shortUrl = `${window.location.origin}?c=${code}`;
+
+                // Save to storage
+                const linkData = {
+                    url: longUrl,
+                    shortUrl: shortUrl,
+                    created: new Date().toISOString()
+                };
+                localStorage.setItem(`sl_${code}`, JSON.stringify(linkData));
+
+                // Save to history
+                saveToHistory(linkData);
+
+                // Show result
+                shortLink.textContent = shortUrl;
+                shortLink.href = longUrl;
+                result.style.display = 'block';
+            }
+
+            function handleRedirect(code) {
+                app.style.display = 'none';
+                redirect.style.display = 'block';
+                
+                const linkData = JSON.parse(localStorage.getItem(`sl_${code}`));
+
+                if (linkData && linkData.url) {
+                    redirectText.textContent = `Mengarahkan ke: ${linkData.url}`;
+                    manualRedirect.href = linkData.url;
+                    manualRedirect.textContent = linkData.url;
+                    
+                    // Redirect after 1 second
+                    setTimeout(() => {
+                        window.location.href = linkData.url;
+                    }, 1000);
+                } else {
+                    redirect.innerHTML = `
+                        <div class="card">
+                            <h2>Link Tidak Ditemukan</h2>
+                            <p>Kode ${code} tidak valid</p>
+                            <a href="${window.location.origin}">Kembali ke halaman utama</a>
+                        </div>
+                    `;
+                }
+            }
+
+            function loadHistory() {
+                const history = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key.startsWith('sl_')) {
+                        history.push(JSON.parse(localStorage.getItem(key)));
+                    }
+                }
+                
+                // Sort by creation date (newest first)
+                history.sort((a, b) => new Date(b.created) - new Date(a.created));
+                
+                if (history.length === 0) {
+                    historyList.innerHTML = '<p>Belum ada riwayat</p>';
+                    return;
+                }
+                
+                historyList.innerHTML = '';
+                history.forEach(item => {
+                    const historyItem = document.createElement('div');
+                    historyItem.className = 'history-item';
+                    historyItem.innerHTML = `
+                        <p><strong>${item.shortUrl}</strong></p>
+                        <p>${item.url}</p>
+                        <small>Dibuat: ${new Date(item.created).toLocaleString()}</small>
+                    `;
+                    historyList.appendChild(historyItem);
+                });
+            }
+
+            function saveToHistory(linkData) {
+                loadHistory(); // Refresh history display
+            }
+
+            function copyShortLink() {
+                navigator.clipboard.writeText(shortLink.textContent);
+                alert('Link berhasil disalin!');
+            }
+
+            function isValidUrl(url) {
+                try {
+                    new URL(url);
+                    return true;
+                } catch {
+                    return false;
+                }
+            }
+
+            function generateCode() {
+                return Math.floor(100000 + Math.random() * 900000); // 6-digit code
+            }
+        });
+    </script>
+</body>
+</html>
